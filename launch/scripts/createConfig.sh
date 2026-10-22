@@ -4,7 +4,7 @@ declare -a bench
 declare -a prefetch
 declare -a btb
 
-PATH_TO_CHAMPSIM=
+PATH_TO_CHAMPSIM= "./"
 
 bench[0]=client_001
 bench[1]=client_002

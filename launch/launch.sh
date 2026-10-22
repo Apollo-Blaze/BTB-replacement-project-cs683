@@ -61,7 +61,7 @@ for ((j=0;j<2;j=j+1)); do
 	for ((k=0;k<3;k=k+1)); do
             echo "sbatch --partition=CPUQ --account=share-ie-idi --nodes=1 --ntasks-per-node=1 --mem=3GB --time=0-0:30:00 --job-name=${bench[i]}_${prefetch[j]}_${btb[k]} scripts/${bench[i]}_${prefetch[j]}_${btb[k]}.sh"
             #sbatch --partition=CPUQ --account=share-ie-idi --nodes=1 --ntasks-per-node=1 --mem=3GB --time=0-0:30:00 --job-name=${bench[i]}_${prefetch[j]}_${btb[k]} scripts/${bench[i]}_${prefetch[j]}_${btb[k]}.sh
-	    <cluster_launch_command_here>
+	    ./run_champsim.sh hashed_perceptron-BTBX-no-next_line-spp_dev-no-lru-1core 50 50 server_001.champsimtrace.xz
 	done
     done
 done 

@@ -9,3 +9,10 @@ inc/champsim.h.bak
 
 bin/
 obj/
+
+dpc3_traces
+client*
+server*
+runner.txt
+Thoughts.txt
+.DS_Store
