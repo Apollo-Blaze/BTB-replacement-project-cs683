@@ -22,7 +22,7 @@ struct BTBEntry {
     uint64_t target_ip;
     uint8_t branch_type;
     uint64_t lru;
-    uint8_t frequency;
+    uint8_t frequency; // counts the number of times a hit happens
 };
 
 struct BTB {
