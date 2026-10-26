@@ -1,0 +1,15 @@
+model,ipc_geomean_speedup,speedup_trace_count
+call_first,0.958459728820494,8
+conditional_first,0.966492455879229,8
+convBTB,1,8
+convBTB_priority,0.969172137793846,8
+indirect_first,0.979931800449139,8
+lfu,0.999659350515649,8
+lfu_priority,1.00284093569695,8
+lfu_priority_target,1.00360834169544,8
+lfu_priority_target_ind,1.00065263411375,8
+lfu_priority_target_reuse_d,1.00311393374516,8
+lfu_target_priority,1.00149537794142,8
+lru_target,0.989572555657441,8
+return_first,0.970842388573939,8
+target_lfu_priority,0.974899827731851,8

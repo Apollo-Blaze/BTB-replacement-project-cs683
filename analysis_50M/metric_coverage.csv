@@ -1,0 +1,8 @@
+metric,runs_with_value,runs_missing_value
+ipc,112,0
+branch_accuracy_pct,112,0
+branch_mpki,112,0
+l1d_miss_rate_pct,112,0
+l2c_miss_rate_pct,112,0
+llc_miss_rate_pct,112,0
+branch_mispredictions,112,0
