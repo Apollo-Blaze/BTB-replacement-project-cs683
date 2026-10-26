@@ -6,7 +6,7 @@ convBTB_priority,0.969495043257736,8
 indirect_first,0.980899590844291,8
 lfu,0.999883401370489,8
 lfu_priority,1.00279228026913,8
-lfu_priority_target,1.00363227790603,8
+lfu_priority_target,1.00361668685199,8
 lfu_priority_target_ind,1.00090067477567,8
 lfu_priority_target_reuse_d,1.00268637030104,8
 lfu_target_priority,1.0021142637861,8

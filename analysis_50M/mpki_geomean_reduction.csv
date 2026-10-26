@@ -1,0 +1,15 @@
+model,mpki_geomean_reduction,mpki_trace_count
+call_first,0.531781539053187,8
+conditional_first,0.63176342353823,8
+convBTB,1,8
+convBTB_priority,0.540565130114857,8
+indirect_first,0.801868358411997,8
+lfu,1.00005885018303,8
+lfu_priority,0.952152864957699,8
+lfu_priority_target,0.942086228343751,8
+lfu_priority_target_ind,0.974435281261272,8
+lfu_priority_target_reuse_d,0.931147839932255,8
+lfu_target_priority,0.990047229342544,8
+lru_target,0.789137299722191,8
+return_first,0.561860752785296,8
+target_lfu_priority,0.682133492473998,8
