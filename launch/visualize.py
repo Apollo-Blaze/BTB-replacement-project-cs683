@@ -564,6 +564,160 @@ def plot_geomean_speedup(data, title, output):
     )
 
 
+def calculate_per_trace_ipc_speedup(df, baseline=BASELINE_MODEL):
+    """Calculate IPC speedup (%) for each model relative to baseline per trace."""
+    ipc = df[["model", "trace", "ipc"]].copy()
+    ipc["ipc"] = pd.to_numeric(ipc["ipc"], errors="coerce")
+    ipc = ipc.groupby(["model", "trace"], as_index=False)["ipc"].mean()
+
+    baseline_df = (
+        ipc[ipc["model"] == baseline][["trace", "ipc"]]
+        .rename(columns={"ipc": "baseline_ipc"})
+    )
+    if baseline_df.empty:
+        raise ValueError(
+            f"Baseline model '{baseline}' was not found. "
+            "Cannot calculate per-trace IPC speedup."
+        )
+
+    paired = ipc.merge(baseline_df, on="trace", how="inner")
+    paired = paired[
+        paired["ipc"].notna()
+        & paired["baseline_ipc"].notna()
+        & np.isfinite(paired["ipc"])
+        & np.isfinite(paired["baseline_ipc"])
+        & (paired["ipc"] > 0)
+        & (paired["baseline_ipc"] > 0)
+    ].copy()
+
+    paired["ipc_speedup_pct"] = (
+        (paired["ipc"] / paired["baseline_ipc"]) - 1.0
+    ) * 100.0
+    return paired[["model", "trace", "ipc_speedup_pct"]]
+
+
+
+def plot_ipc_all_traces_grouped(df, output):
+    """One grouped bar chart: each trace has one IPC bar per BTB policy."""
+    data = df[["model", "trace", "ipc"]].copy()
+    data["ipc"] = pd.to_numeric(data["ipc"], errors="coerce")
+    data = data[data["trace"].isin(TRACES) & data["ipc"].notna()].copy()
+    if data.empty:
+        return False
+
+    # Average duplicate runs for the same policy/trace pair.
+    data = data.groupby(["trace", "model"], as_index=False)["ipc"].mean()
+    models = [m for m in PLOT_ORDER if m in data["model"].unique()]
+    models += [m for m in data["model"].unique() if m not in models]
+    traces = [t for t in TRACES if t in data["trace"].unique()]
+    pivot = data.pivot(index="trace", columns="model", values="ipc").reindex(
+        index=traces, columns=models
+    )
+
+    # Wide layout keeps the model bars distinguishable for every trace.
+    fig_width = max(15, len(traces) * 2.2)
+    fig, ax = plt.subplots(figsize=(fig_width, 7.5))
+    x = np.arange(len(traces))
+    group_width = 0.86
+    bar_width = group_width / max(len(models), 1)
+
+    for i, model in enumerate(models):
+        offset = (i - (len(models) - 1) / 2) * bar_width
+        values = pivot[model].to_numpy(dtype=float)
+        ax.bar(
+            x + offset,
+            values,
+            width=bar_width * 0.94,
+            label=DISPLAY_NAMES.get(model, model),
+            color=MODEL_STYLE.get(model, ("grey", ""))[0],
+            edgecolor="black",
+            linewidth=0.35,
+            hatch=MODEL_STYLE.get(model, ("grey", ""))[1],
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(traces, rotation=25, ha="right")
+    ax.set_ylabel("Instructions per cycle (IPC)")
+    ax.set_title("Per-trace IPC by BTB policy  all traces in one plot")
+    ax.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.5)
+    ax.set_axisbelow(True)
+    ax.legend(
+        title="BTB policy",
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1.0),
+        fontsize=8,
+        title_fontsize=9,
+    )
+    fig.tight_layout()
+    fig.savefig(output, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+def plot_per_trace_ipc_speedup(data, trace, output):
+    """Plot each policy's IPC change (%) against LRU for one trace."""
+    data = data[data["trace"] == trace].dropna(
+        subset=["ipc_speedup_pct"]
+    ).copy()
+    if data.empty:
+        return False
+
+    order = [m for m in PLOT_ORDER if m in data["model"].unique()]
+    order += [m for m in data["model"].unique() if m not in order]
+    data["order"] = data["model"].map(
+        {model: i for i, model in enumerate(order)}
+    )
+    data = data.sort_values("order").reset_index(drop=True)
+
+    values = data["ipc_speedup_pct"].astype(float).to_numpy()
+    labels = [DISPLAY_NAMES.get(m, m) for m in data["model"]]
+    colors = [MODEL_STYLE.get(m, ("grey", ""))[0] for m in data["model"]]
+
+    fig, ax = plt.subplots(figsize=(max(10, len(data) * 0.8), 5.8))
+    bars = ax.bar(
+        range(len(data)),
+        values,
+        color=colors,
+        edgecolor="black",
+        linewidth=0.7,
+    )
+    for bar, model in zip(bars, data["model"]):
+        bar.set_hatch(MODEL_STYLE.get(model, ("grey", ""))[1])
+
+    ax.axhline(0, color="black", linewidth=1.1)
+    ax.set_xticks(range(len(data)))
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_ylabel("IPC speedup vs LRU (%)")
+    ax.set_title(f"Per-trace IPC speedup vs LRU  {trace}")
+    ax.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.5)
+    ax.set_axisbelow(True)
+
+    low = min(float(np.min(values)), 0.0)
+    high = max(float(np.max(values)), 0.0)
+    span = high - low
+    padding = span * 0.18 if span else 0.1
+    ax.set_ylim(low - padding, high + padding)
+    offset = max(span * 0.018, 0.02)
+
+    for bar, value in zip(bars, values):
+        if value >= 0:
+            y, va = value + offset, "bottom"
+        else:
+            y, va = value - offset, "top"
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            y,
+            f"{value:+.2f}%",
+            ha="center",
+            va=va,
+            fontsize=8,
+        )
+
+    fig.tight_layout()
+    fig.savefig(output, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+
 def plot_geomean_mpki_reduction(data, title, output):
     return plot_geomean_ratio(
         data=data,
@@ -581,6 +735,7 @@ def make_plots(
     plots_dir,
     speedup_summary,
     mpki_summary,
+    per_trace_speedup,
 ):
     plots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -639,6 +794,20 @@ def make_plots(
                         trace_dir / f"{metric}_{trace}.png",
                     )
 
+        # Per-trace IPC speedup (%) relative to the LRU/convBTB baseline.
+        # Include every policy, including standalone branch-priority variants.
+        if group_name == "main":
+            speedup_trace_dir = group_dir / "per_trace_speedup"
+            speedup_trace_dir.mkdir(parents=True, exist_ok=True)
+            for trace in sorted(per_trace_speedup["trace"].dropna().unique()):
+                if trace == "unknown":
+                    continue
+                count += plot_per_trace_ipc_speedup(
+                    per_trace_speedup,
+                    trace,
+                    speedup_trace_dir / f"ipc_speedup_{trace}.png",
+                )
+
         # IPC geometric mean plot for this group.
         group_speedup = speedup_summary[
             speedup_summary["model"].isin(models)
@@ -646,7 +815,7 @@ def make_plots(
 
         count += plot_geomean_speedup(
             group_speedup,
-            f"Geometric Mean IPC Speedup vs LRU — {group_name}",
+            f"Geometric Mean IPC Speedup vs LRU {group_name}",
             group_dir / "ipc_geomean_speedup.png",
         )
 
@@ -657,7 +826,7 @@ def make_plots(
 
         count += plot_geomean_mpki_reduction(
             group_mpki,
-            f"Geometric Mean MPKI Reduction vs LRU — {group_name}",
+            f"Geometric Mean MPKI Reduction vs LRU {group_name}",
             group_dir / "mpki_geomean_reduction.png",
         )
 
@@ -760,6 +929,7 @@ def main():
     try:
         speedup_summary = calculate_geomean_speedup(df)
         mpki_summary = calculate_geomean_mpki_reduction(df)
+        per_trace_speedup = calculate_per_trace_ipc_speedup(df)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -800,6 +970,12 @@ def main():
         float_format="%.15g",
     )
 
+    per_trace_speedup.to_csv(
+        out / "ipc_speedup_per_trace.csv",
+        index=False,
+        float_format="%.15g",
+    )
+
     plots_dir = out / "plots"
 
     count = make_plots(
@@ -808,7 +984,15 @@ def main():
         plots_dir,
         speedup_summary,
         mpki_summary,
+        per_trace_speedup,
     )
+
+    # Single grouped chart: all traces on the x-axis, with one bar per model.
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    if plot_ipc_all_traces_grouped(
+        df, plots_dir / "ipc_per_trace_all_models.png"
+    ):
+        count += 1
 
     pd.DataFrame({
         "metric": present,
@@ -824,6 +1008,11 @@ def main():
     print(f"Created {count} plots.")
     print(f"Main overall plots: {plots_dir}")
     print(f"Baseline per-trace plots: {plots_dir / 'per_trace'}")
+    print(f"All-traces grouped IPC plot: {plots_dir / 'ipc_per_trace_all_models.png'}")
+    print(
+        "Per-trace IPC speedup plots: "
+        f"{plots_dir / 'per_trace_speedup'}"
+    )
     print(
         "Ordering experiment plots: "
         f"{plots_dir / 'ordering_experiments'}"
