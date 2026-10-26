@@ -140,8 +140,8 @@
                         /*
                         * Replacement order:
                         * 1. Lowest frequency.
-                        * 2. Lowest target stability.
-                        * 3. Lowest branch-type protection.
+                        * 2. Lowest branch-type protection.
+                        * 3. Lowest target stability.
                         * 4. Oldest entry, using vector order (LRU).
                         */
                         size_t victim = 0;
@@ -179,7 +179,7 @@
 
                 if (target != 0) {
                     // Update the stability estimate using the resolved target.
-                    // Same target: increase confidence (saturates at 3).
+                    // Same target: increase confidence (saturates at 16).
                     // Changed target: reset confidence because the target changed.
                     if (target == entry.target_ip) {
                         if (entry.target_stability < MAX_TARGET_STABILITY) {
@@ -320,7 +320,7 @@
 
         return lru_partition;
     }
-
+    // used to age the frequencies after specific time interval if they are not used in a while
     void age_BTB() {
         for (int p = 0; p < NUM_BTB_PARTITIONS; p++) {
             for (auto& set : btb_partition[p].theBTB) {

@@ -97,8 +97,8 @@ struct BTB {
     }
 
     /*
-     * Branch-type protection used as a tie-breaker during LFU replacement.
-     * Higher priority means the entry is better protected from eviction.
+       Branch-type protection used as a tie-breaker during LFU replacement.
+       Higher priority means the entry is better protected from eviction.
      */
     int replacement_priority(uint8_t branch_type) {
         switch (branch_type) {
@@ -138,11 +138,11 @@ struct BTB {
 
                 if (theBTB[idx].size() >= assoc) {
                     /*
-                     * Replacement order (primary to tertiary):
-                     * 1. Lowest target stability (least stable target first).
-                     * 2. Lowest frequency (LFU).
-                     * 3. Lowest branch-type protection.
-                     * 4. Oldest entry, using vector order (LRU), if all above tie.
+                       Replacement order (primary to tertiary):
+                       1. Lowest target stability (least stable target first).
+                       2. Lowest frequency (LFU).
+                       3. Lowest branch-type protection.
+                       4. Oldest entry, using vector order (LRU), if all above tie.
                      */
                     size_t victim = 0;
 

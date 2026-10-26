@@ -140,15 +140,15 @@ struct BTB {
 
                 if (theBTB[idx].size() >= assoc) {
                     /*
-                     * Replacement order:
-                     * 1. Lowest frequency (LFU).
-                     * 2. Lowest branch-type protection.
-                     * 3. Largest reuse distance (least recently reused).
-                     * 4. Oldest LRU entry as the final tie-breaker.
-                     *
-                     * reuse_distance is the number of global branch-prediction
-                     * accesses between consecutive hits to this entry. It is
-                     * an online reuse-interval proxy, not exact stack distance.
+                     Replacement order:
+                     1. Lowest frequency (LFU).
+                     2. Lowest branch-type protection.
+                     3. Largest reuse distance (least recently reused).
+                     4. Oldest LRU entry as the final tie-breaker.
+                     
+                     reuse_distance is the number of global branch-prediction
+                     accesses between consecutive hits to this entry. It is
+                     an online reuse-interval proxy, not exact stack distance.
                      */
                     size_t victim = 0;
 
@@ -169,11 +169,6 @@ struct BTB {
                             } else if (candidate_priority == victim_priority) {
                                 if (candidate.reuse_distance >
                                     current_victim.reuse_distance) {
-                                    victim = i;
-                                } else if (
-                                    candidate.reuse_distance ==
-                                        current_victim.reuse_distance &&
-                                    candidate.lru < current_victim.lru) {
                                     victim = i;
                                 }
                             }
@@ -198,7 +193,7 @@ struct BTB {
             entry.lru = lru_counter;
 
             // The branch was accessed again. Measure the interval since its
-            // previous prediction hit, then update its last-access marker.
+            // previous prediction hit, then update its last access marker.
             if (access_counter >= entry.last_access_counter) {
                 entry.reuse_distance =
                     access_counter - entry.last_access_counter;

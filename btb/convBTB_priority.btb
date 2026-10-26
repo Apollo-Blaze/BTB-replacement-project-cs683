@@ -131,12 +131,12 @@ struct BTB {
 
                 if (theBTB[idx].size() >= assoc) {
                     /*
-                     * Replacement order:
-                     * 1. Lowest branch-type priority is evicted first.
-                     * 2. For equal priority, evict the oldest entry.
-                     *
-                     * Existing entries are moved to the back on updates,
-                     * so the first matching-priority entry is the LRU one.
+                     Replacement order:
+                     1. Lowest branch-type priority is evicted first.
+                     2. For equal priority, evict the oldest entry.
+                    
+                     Existing entries are moved to the back on updates,
+                     so the first matching-priority entry is the LRU one.
                      */
                     size_t victim = 0;
 

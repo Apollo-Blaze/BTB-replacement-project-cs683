@@ -138,11 +138,11 @@ struct BTB {
 
                 if (theBTB[idx].size() >= assoc) {
                     /*
-                     * Replacement order (primary to tertiary):
-                     * 1. Lowest frequency (LFU).
-                     * 2. Lowest target stability (least stable target first).
-                     * 3. Lowest branch-type protection.
-                     * 4. Oldest entry, using vector order (LRU), if all above tie.
+                       Replacement order (primary to tertiary):
+                       1. Lowest frequency (LFU).
+                       2. Lowest target stability (least stable target first).
+                       3. Lowest branch-type protection.
+                       4. Oldest entry, using vector order (LRU), if all above tie.
                      */
                     size_t victim = 0;
 
