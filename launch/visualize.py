@@ -14,7 +14,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-RESULTS_FOLDER = "results_25M"
+RESULTS_FOLDER = "results_50M"
 BASELINE_MODEL = "convBTB"
 
 
@@ -35,7 +35,6 @@ MODELS = [
     "return_first",
 ]
 
-# Baseline policies: overall and per-trace plots.
 BASELINE_MODELS = [
     "convBTB",
     "lfu",
@@ -43,7 +42,6 @@ BASELINE_MODELS = [
     "lfu_priority_target_ind",
 ]
 
-# Ordering experiments: overall plots only.
 ORDERING_MODELS = [
     "lfu_target_priority",
     "lfu_priority_target",
@@ -52,7 +50,6 @@ ORDERING_MODELS = [
     "target_lfu_priority",
 ]
 
-# Branch ordering and priority experiments: overall plots only.
 PRIORITY_MODELS = [
     "indirect_first",
     "call_first",
@@ -61,7 +58,6 @@ PRIORITY_MODELS = [
     "conditional_first",
 ]
 
-# Names shown in plots. CSV files retain original model names.
 DISPLAY_NAMES = {
     "convBTB": "LRU",
     "lfu": "LFU",
@@ -122,6 +118,7 @@ METRICS = {
 }
 
 COLOURS = list(plt.get_cmap("tab20").colors)
+
 HATCHES = [
     "", "///", "...", "\\\\\\", "xxx", "++", "oo",
     "**", "||", "--", "..", "//", "\\\\",
@@ -317,17 +314,14 @@ def plot_metric(data, metric, title, output):
 
 def calculate_geomean_speedup(df, baseline=BASELINE_MODEL):
     """
-    Compute geometric mean of per-trace IPC speedups relative to convBTB.
+    IPC ratio:
+        policy IPC / baseline IPC
 
-    Per trace:
-        speedup = IPC(policy, trace) / IPC(convBTB, trace)
+    GM speedup:
+        exp(mean(log(per-trace IPC ratios)))
 
-    Across traces:
-        GM speedup = exp(mean(log(speedup)))
-
-    Only traces with positive IPC for both the policy and baseline
-    are included. The baseline is taken from the full dataset, not
-    from an individual experiment group.
+    Only traces with positive, finite IPC for both policies
+    are included.
     """
     if "ipc" not in df.columns:
         raise ValueError("IPC data is required to calculate speedups.")
@@ -335,10 +329,9 @@ def calculate_geomean_speedup(df, baseline=BASELINE_MODEL):
     ipc = df[["model", "trace", "ipc"]].copy()
     ipc["ipc"] = pd.to_numeric(ipc["ipc"], errors="coerce")
 
-    ipc = (
-        ipc.groupby(["model", "trace"], as_index=False)["ipc"]
-        .mean()
-    )
+    ipc = ipc.groupby(
+        ["model", "trace"], as_index=False
+    )["ipc"].mean()
 
     baseline_df = (
         ipc[ipc["model"] == baseline][["trace", "ipc"]]
@@ -357,9 +350,7 @@ def calculate_geomean_speedup(df, baseline=BASELINE_MODEL):
         policy_df = ipc[ipc["model"] == model][["trace", "ipc"]]
 
         paired = policy_df.merge(
-            baseline_df,
-            on="trace",
-            how="inner",
+            baseline_df, on="trace", how="inner"
         )
 
         paired = paired[
@@ -369,31 +360,124 @@ def calculate_geomean_speedup(df, baseline=BASELINE_MODEL):
             & np.isfinite(paired["baseline_ipc"])
             & (paired["ipc"] > 0)
             & (paired["baseline_ipc"] > 0)
-        ].copy()
+        ]
 
         if paired.empty:
-            geomean_speedup = np.nan
+            gm = np.nan
         else:
-            speedups = (
+            ratios = (
                 paired["ipc"].to_numpy(dtype=float)
                 / paired["baseline_ipc"].to_numpy(dtype=float)
             )
-
-            geomean_speedup = float(
-                np.exp(np.log(speedups).mean())
-            )
+            gm = float(np.exp(np.log(ratios).mean()))
 
         rows.append({
             "model": model,
-            "ipc_geomean_speedup": geomean_speedup,
+            "ipc_geomean_speedup": gm,
             "speedup_trace_count": len(paired),
         })
 
     return pd.DataFrame(rows)
 
 
-def plot_geomean_speedup(data, title, output):
-    data = data.dropna(subset=["ipc_geomean_speedup"]).copy()
+# ============================================================
+#       Geometric mean of normalized MPKI reductions
+# ============================================================
+
+def calculate_geomean_mpki_reduction(df, baseline=BASELINE_MODEL):
+    """
+    MPKI reduction ratio:
+        baseline MPKI / policy MPKI
+
+    GM MPKI reduction:
+        exp(mean(log(per-trace MPKI reduction ratios)))
+
+    A ratio above 1 means lower MPKI than the baseline.
+    A ratio below 1 means higher MPKI than the baseline.
+
+    Traces with zero, negative, missing, or non-finite MPKI
+    for either policy or baseline are excluded. Zero-MPKI
+    cases are reported as excluded rather than assigning an
+    arbitrary epsilon.
+    """
+    if "branch_mpki" not in df.columns:
+        raise ValueError("Branch MPKI data is required.")
+
+    mpki = df[["model", "trace", "branch_mpki"]].copy()
+    mpki["branch_mpki"] = pd.to_numeric(
+        mpki["branch_mpki"], errors="coerce"
+    )
+
+    # Aggregate duplicate runs of the same model and trace.
+    mpki = mpki.groupby(
+        ["model", "trace"], as_index=False
+    )["branch_mpki"].mean()
+
+    baseline_df = (
+        mpki[mpki["model"] == baseline][["trace", "branch_mpki"]]
+        .rename(columns={"branch_mpki": "baseline_mpki"})
+    )
+
+    if baseline_df.empty:
+        raise ValueError(
+            f"Baseline model '{baseline}' was not found for MPKI."
+        )
+
+    rows = []
+
+    for model in mpki["model"].unique():
+        policy_df = mpki[
+            mpki["model"] == model
+        ][["trace", "branch_mpki"]]
+
+        paired = policy_df.merge(
+            baseline_df, on="trace", how="inner"
+        )
+
+        valid = (
+            paired["branch_mpki"].notna()
+            & paired["baseline_mpki"].notna()
+            & np.isfinite(paired["branch_mpki"])
+            & np.isfinite(paired["baseline_mpki"])
+            & (paired["branch_mpki"] > 0)
+            & (paired["baseline_mpki"] > 0)
+        )
+
+        paired = paired[valid].copy()
+
+        if paired.empty:
+            gm = np.nan
+        else:
+            # Lower MPKI is better, so invert the ratio.
+            ratios = (
+                paired["baseline_mpki"].to_numpy(dtype=float)
+                / paired["branch_mpki"].to_numpy(dtype=float)
+            )
+
+            gm = float(np.exp(np.log(ratios).mean()))
+
+        rows.append({
+            "model": model,
+            "mpki_geomean_reduction": gm,
+            "mpki_trace_count": len(paired),
+        })
+
+    return pd.DataFrame(rows)
+
+
+# ============================================================
+#               Plot normalized geometric means
+# ============================================================
+
+def plot_geomean_ratio(
+    data,
+    ratio_column,
+    ylabel,
+    title,
+    output,
+    reference_label,
+):
+    data = data.dropna(subset=[ratio_column]).copy()
 
     if data.empty:
         return False
@@ -406,7 +490,7 @@ def plot_geomean_speedup(data, title, output):
     )
     data = data.sort_values("order").reset_index(drop=True)
 
-    values = data["ipc_geomean_speedup"].astype(float)
+    values = data[ratio_column].astype(float)
     labels = [DISPLAY_NAMES.get(m, m) for m in data["model"]]
 
     fig, ax = plt.subplots(figsize=(max(11, len(data) * 0.95), 6))
@@ -425,18 +509,17 @@ def plot_geomean_speedup(data, title, output):
     for bar, model in zip(bars, data["model"]):
         bar.set_hatch(MODEL_STYLE.get(model, ("grey", ""))[1])
 
-    # Baseline reference: a speedup of exactly 1.0.
     ax.axhline(
         1.0,
         color="black",
         linestyle="--",
         linewidth=1.2,
-        label="LRU baseline = 1.0",
+        label=reference_label,
     )
 
     ax.set_xticks(range(len(data)))
     ax.set_xticklabels(labels, rotation=50, ha="right")
-    ax.set_ylabel("Geometric mean IPC speedup vs LRU")
+    ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(axis="y", linestyle=":", linewidth=0.8, alpha=0.5)
     ax.set_axisbelow(True)
@@ -470,7 +553,35 @@ def plot_geomean_speedup(data, title, output):
     return True
 
 
-def make_plots(df, metrics, plots_dir, speedup_summary):
+def plot_geomean_speedup(data, title, output):
+    return plot_geomean_ratio(
+        data=data,
+        ratio_column="ipc_geomean_speedup",
+        ylabel="Geometric mean IPC speedup vs LRU",
+        title=title,
+        output=output,
+        reference_label="LRU baseline = 1.0",
+    )
+
+
+def plot_geomean_mpki_reduction(data, title, output):
+    return plot_geomean_ratio(
+        data=data,
+        ratio_column="mpki_geomean_reduction",
+        ylabel="Geometric mean MPKI reduction ratio vs LRU",
+        title=title,
+        output=output,
+        reference_label="LRU baseline = 1.0",
+    )
+
+
+def make_plots(
+    df,
+    metrics,
+    plots_dir,
+    speedup_summary,
+    mpki_summary,
+):
     plots_dir.mkdir(parents=True, exist_ok=True)
 
     groups = {
@@ -528,9 +639,7 @@ def make_plots(df, metrics, plots_dir, speedup_summary):
                         trace_dir / f"{metric}_{trace}.png",
                     )
 
-        # Normalized geometric mean IPC speedup plot per group.
-        # The speedups were computed using the full dataset, so the
-        # baseline need not be part of the current experiment group.
+        # IPC geometric mean plot for this group.
         group_speedup = speedup_summary[
             speedup_summary["model"].isin(models)
         ]
@@ -541,11 +650,28 @@ def make_plots(df, metrics, plots_dir, speedup_summary):
             group_dir / "ipc_geomean_speedup.png",
         )
 
-    # NEW: one plot comparing all available policies.
+        # MPKI geometric mean plot for this group.
+        group_mpki = mpki_summary[
+            mpki_summary["model"].isin(models)
+        ]
+
+        count += plot_geomean_mpki_reduction(
+            group_mpki,
+            f"Geometric Mean MPKI Reduction vs LRU — {group_name}",
+            group_dir / "mpki_geomean_reduction.png",
+        )
+
+    # Overall comparison of all policies.
     count += plot_geomean_speedup(
         speedup_summary,
         "Geometric Mean IPC Speedup vs LRU (convBTB)",
         plots_dir / "ipc_geomean_speedup.png",
+    )
+
+    count += plot_geomean_mpki_reduction(
+        mpki_summary,
+        "Geometric Mean MPKI Reduction vs LRU (convBTB)",
+        plots_dir / "mpki_geomean_reduction.png",
     )
 
     return count
@@ -623,19 +749,29 @@ def main():
 
     summary = df.groupby("model", as_index=False)[present].mean()
 
-    # Calculate normalized geometric-mean speedups once from
-    # the complete dataset, before filtering for individual groups.
-    if "ipc" not in df.columns or not df["ipc"].notna().any():
+    # Calculate normalized GMs from the complete dataset so each
+    # policy is compared against the same baseline trace set.
+    if "ipc" not in df or not df["ipc"].notna().any():
         raise SystemExit("No IPC values were parsed; cannot calculate speedup.")
+
+    if "branch_mpki" not in df or not df["branch_mpki"].notna().any():
+        raise SystemExit("No branch MPKI values were parsed.")
 
     try:
         speedup_summary = calculate_geomean_speedup(df)
+        mpki_summary = calculate_geomean_mpki_reduction(df)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
 
-    # Add normalized GM results and coverage to the existing summary.
+    # Merge both normalized GM metrics into the model-level summary.
     summary = summary.merge(
         speedup_summary,
+        on="model",
+        how="left",
+    )
+
+    summary = summary.merge(
+        mpki_summary,
         on="model",
         how="left",
     )
@@ -658,12 +794,20 @@ def main():
         float_format="%.15g",
     )
 
+    mpki_summary.to_csv(
+        out / "mpki_geomean_reduction.csv",
+        index=False,
+        float_format="%.15g",
+    )
+
     plots_dir = out / "plots"
+
     count = make_plots(
         df,
         present,
         plots_dir,
         speedup_summary,
+        mpki_summary,
     )
 
     pd.DataFrame({
@@ -694,6 +838,15 @@ def main():
     print(
         speedup_summary.sort_values(
             "ipc_geomean_speedup",
+            ascending=False,
+            na_position="last",
+        ).to_string(index=False)
+    )
+
+    print("\nGeometric mean MPKI reduction vs LRU:")
+    print(
+        mpki_summary.sort_values(
+            "mpki_geomean_reduction",
             ascending=False,
             na_position="last",
         ).to_string(index=False)
