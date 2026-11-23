@@ -142,9 +142,27 @@
 
   UtilityTable utility_table;
 
-  uint8_t calculate_insertion_rrpv(uint64_t utility,bool ghost_hit) {
-      uint64_t priority = utility + (ghost_hit ? 2 : 0);
+  // To include branch priority to the score 
+  uint8_t get_branch_priority(uint8_t type) {
+      switch (type) {
+          case BRANCH_INDIRECT:
+          case BRANCH_INDIRECT_CALL:
+          case BRANCH_RETURN:
+              return 3;
 
+          case BRANCH_DIRECT_CALL:
+              return 2;
+
+          case BRANCH_CONDITIONAL:
+              return 1;
+
+          default:
+              return 0;
+      }
+  }
+
+  uint8_t calculate_insertion_rrpv(uint64_t utility,uint8_t branch_priority,bool ghost_hit) {
+      uint64_t priority = utility + branch_priority + (ghost_hit ? 2 : 0);
       if (priority >= 8)
           return 0;
 
@@ -260,7 +278,7 @@
                   utility = std::max(utility, ghost_utility);
 
                   // Calculate insertion priority.
-                  entry.rrpv = calculate_insertion_rrpv(utility, ghost_hit);
+                  entry.rrpv = calculate_insertion_rrpv(utility, get_branch_priority(b_type), ghost_hit);
 
                   // SRRIP victim selection.
                   if (theBTB[idx].size() >= assoc) {
