@@ -47,6 +47,76 @@ Examples of custom policy files include:
 8.  `btb/lfu_priority_target_reuse_d.btb`
 9.  `btb/reuse_d_priority.btb`
 10. `btb/target_lfu_priority.btb`
+11. `btb/srrip_priority.btb`
+12. `btb/ghost_utility.btb`
+
+## Checkpoint 2 update
+
+Checkpoint 2 expands the replacement-policy comparison with two SRRIP-based policies:
+
+### `srrip_priority`
+
+`btb/srrip_priority.btb` combines Static RRIP (SRRIP) victim selection
+with branch-type priority and observed frequency:
+
+- Hits set the entry's Re-reference Prediction Value (RRPV) to `0`,
+  indicating near-term reuse.
+- Indirect branches, indirect calls, and returns enter protected with
+  RRPV `0`; conditional and direct branches enter with RRPV `3`.
+- When entries are considered for eviction, the policy first looks for
+  RRPV `3` entries. If multiple candidates are present, it selects the
+  one with the lowest observed frequency.
+- If no RRPV `3` entry exists, it ages entries by incrementing their
+  RRPV.
+- Branch hit frequency is capped at 15.
+
+This policy replaces the conventional exact-LRU-style victim choice with
+a bounded re-reference value while retaining branch-aware insertion and
+frequency information.
+
+### `ghost_utility`
+
+`btb/ghost_utility.btb` combines SRRIP with online reuse and target-stability
+utility tracking:
+
+- Reuse utility increases when a BTB entry receives hits.
+- Stability utility increases when an observed branch target matches the
+  previously recorded target and decreases after a target change.
+- Utility is calculated as
+  `(2 * reuse_score + stability_score) / 3`.
+- Branch priority is added to indirect branches, indirect calls, and
+  returns.
+- A ghost hit and/or higher utility assigns a lower insertion RRPV,
+  protecting branches that are estimated to be valuable.
+- A 512-entry ghost table remembers evicted branches for up to 100,000
+  BTB counter events. Re-insertion can recover the evicted branch's
+  utility and receive additional reuse priority.
+
+SRRIP aging is used when no entry has reached maximum RRPV. On eviction,
+the ghost table records the evicted branch IP and its current utility.
+
+### Checkpoint 2 experiment configuration
+
+The new checkpoint 2 experiment set compares the conventional `convBTB`
+baseline, `lfu_priority_target`, `srrip_priority`, and `ghost_utility`.
+It uses the following Google-workload traces:
+
+1. `arizona_0001.champsim-003.gz`
+2. `arizona_0002.champsim-001.gz`
+3. `charlie_0000.champsim-005.gz`
+4. `charlie_0002.champsim-003.gz`
+5. `merced_0000.champsim-002.gz`
+6. `merced_0004.champsim-001.gz`
+7. `sierra.a.3_0000.champsim-001.gz`
+8. `sierra.a.6_0001.champsim-001.gz`
+9. `tahoe_0001.champsim-002.gz`
+10. `tahoe_0003.champsim-001.gz`
+11. `tango_0000.champsim-004.gz`
+12. `tango_0001.champsim-003.gz`
+
+`launch/run_exp.sh` builds and runs these models in parallel batches.
+The completed run is visible in the
+`results_50M/` directory.
 
 ## Repository locations
 
@@ -59,18 +129,11 @@ The repository is organized by purpose.
     implementation.
 4.  `dpc3_traces/` contains the compressed ChampSim traces used in the
     experiments.
-5.  `launch/` contains experiment launch scripts. `launch/launch.sh` and
-    `launch/run_exp.sh` are entry points, and
-    `launch/scripts/createConfig.sh` creates experiment configurations.
-6.  `btb_experiment_results/` contains experiment logs under
-    `btb_experiment_results/logs/`, the run manifest
-    `btb_experiment_results/run_manifest.csv`, and the plotting script
-    `btb_experiment_results/visualize.py`.
-7. `analysis_25M/` contains aggregated CSV metrics and plots for the 25
+5. `analysis_25M/` contains aggregated CSV metrics and plots for the 25
     million instruction runs.
-8. `analysis_50M/` contains aggregated CSV metrics and plots for the 50
+6. `analysis_50M/` contains aggregated CSV metrics and plots for the 50
     million instruction runs.
-9. `bin/` contains compiled ChampSim executables for the configured
+7. `bin/` contains compiled ChampSim executables for the configured
     policies.
 
 ## Experimental configuration
@@ -117,6 +180,18 @@ Build PDede:
 ./build_champsim.sh hashed_perceptron pdede fdip next_line spp_dev no lru 1
 ```
 
+Build SRRIP+Priority policy:
+
+``` bash
+./build_champsim.sh hashed_perceptron srrip_priority fdip next_line spp_dev no lru 1
+```
+
+Build ghost-utility policy:
+
+``` bash
+./build_champsim.sh hashed_perceptron ghost_utility fdip next_line spp_dev no lru 1
+```
+
 To build without FDIP, replace the third argument `fdip` with `no`. For
 example:
 
@@ -136,38 +211,16 @@ instructions of measurement:
 ``` bash
 ./run_champsim.sh hashed_perceptron-convBTB-fdip-next_line-spp_dev-no-lru-1core 50 50 server_010.champsimtrace.xz
 ```
-
-Trace files are stored in `dpc3_traces/`. Confirm that the requested
-trace exists and that the executable name matches a binary in `bin/`.
-
 The launch scripts in `launch/` support running groups of experiments.
 Review the scripts before execution to confirm the selected policies,
 trace list, and instruction counts.
 
-## Collecting and visualizing results
+## Collecting results
 
-## Collecting and Visualizing Results
-
-The `launch/run_exp.sh` script is used to execute experiments across different BTB models and traces. It runs multiple experiments concurrently using background tasks, with the current configuration set to **4 simultaneous jobs**.
+The `launch/run_exp.sh` script is used to execute experiments across different BTB models and traces. It runs multiple experiments concurrently using background tasks, with the current configuration set to **6 simultaneous jobs**.
 
 The results are stored in directories such as `results_25M/` and `results_50M/`, depending on the simulation length.
 
-To collect, process, and visualize the experimental results, run `launch/visualize.py`. The script processes the results from the corresponding results directory and generates analysis outputs. (Change the directory in the script to folder of result eg: results_25M)
-
-The generated analysis is organized by simulation length:
-
-1. `analysis_25M/` contains summary CSV files and plots for 25 million instruction runs.
-2. `analysis_50M/` contains summary CSV files and plots for 50 million instruction runs.
-
-Each analysis directory contains the following summary files:
-
-1. `comparison_metrics_by_model.csv`
-2. `comparison_metrics_per_trace.csv`
-3. `ipc_geomean_speedup.csv`
-4. `metric_coverage.csv`
-5. `metrics_per_run.csv`
-
-The `plots/` subdirectory contains visualizations for overall model comparisons, per trace performance, and priority and ordering experiments.
 
 ## Evaluation metrics
 
@@ -179,13 +232,8 @@ branch behavior.
 2.  **Geometric mean IPC speedup:** the geometric mean of per trace IPC
     ratios relative to the `convBTB` baseline.
 3.  **Branch accuracy:** the accuracy value reported by the simulator.
-4.  **Branch mispredictions:** the reported number of branch
-    mispredictions.
-5.  **Branch MPKI:** branch misses per thousand
+4.  **Branch MPKI:** branch misses per thousand
     instructions.
-6.  **Cache miss rates:** the reported L1D, L2C, and LLC miss rates,
-    included to help check whether broader memory behavior changes
-    alongside BTB policy changes.
 
 ## References
 
