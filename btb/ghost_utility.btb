@@ -30,14 +30,12 @@
     uint8_t branch_type;
     uint64_t lru;
     uint8_t rrpv;  // Used for SRRIP replacement.
-    uint8_t reuse_score;
-    uint8_t stability_score;
   };
 
   struct GhostEntry {
       uint64_t ip;
       uint64_t eviction_time;
-      uint8_t utility;
+      uint8_t utility;  
       bool valid;
   };
 
