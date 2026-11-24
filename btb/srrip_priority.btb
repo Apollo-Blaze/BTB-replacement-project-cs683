@@ -14,7 +14,7 @@
 #define BASIC_BTB_RAS_SIZE 64
 #define BASIC_BTB_CALL_INSTR_SIZE_TRACKERS 1024
 
-#define SRRIP_PROTECTED_INSERT_RRPV 2
+#define SRRIP_PROTECTED_INSERT_RRPV 0
 #define SRRIP_INSERT_RRPV 3
 #define SRRIP_MAX_RRPV 3
 
@@ -123,7 +123,8 @@ struct BTB {
 
                 // Branch-type-aware SRRIP insertion.
                 switch (b_type) {
-                    case BRANCH_CONDITIONAL:
+                    case BRANCH_INDIRECT:
+                    case BRANCH_INDIRECT_CALL:
                     case BRANCH_RETURN:
                         entry.rrpv = SRRIP_PROTECTED_INSERT_RRPV;
                         break;

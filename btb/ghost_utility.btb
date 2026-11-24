@@ -146,15 +146,9 @@
   uint8_t get_branch_priority(uint8_t type) {
       switch (type) {
           case BRANCH_INDIRECT:
-          case BRANCH_RETURN:
-            return 3;
-
           case BRANCH_INDIRECT_CALL:
-              return 2;
-
-          case BRANCH_CONDITIONAL:
-          case BRANCH_DIRECT_JUMP:
-              return 1;
+          case BRANCH_RETURN:
+              return 3;
 
           default:
               return 0;
@@ -162,14 +156,14 @@
   }
 
   uint8_t calculate_insertion_rrpv(uint64_t utility,uint8_t branch_priority,bool ghost_hit) {
-      uint64_t priority = utility + 2 * branch_priority + (ghost_hit ? 4 : 0);
-      if (priority >= 12)
+      uint64_t priority = utility + branch_priority + (ghost_hit ? 2 : 0);
+      if (priority >= 8)
           return 0;
 
-      if (priority >= 8)
+      if (priority >= 5)
           return 1;
 
-      if (priority >= 4)
+      if (priority >= 2)
           return 2;
 
       return 3;
